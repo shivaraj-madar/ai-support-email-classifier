@@ -1,0 +1,544 @@
+{
+  "name": "AI Customer Support Email Classifier",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-ticket",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d7737d50-cac8-44dc-9bac-d5b8fa83ceb1",
+      "name": "Webhook - Support Ticket",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        176
+      ],
+      "webhookId": "support-ticket-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Classify this customer support email into exactly one of these categories: Billing, Technical, Complaint. Respond with ONLY the category name, nothing else.\\n\\nEmail: {{ $json.email }}\"\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"maxOutputTokens\": 200,\n    \"temperature\": 0\n  }\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "91471812-0406-4448-81eb-59ba6128f007",
+      "name": "AI - Classify Email (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        176
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-category",
+              "name": "category",
+              "value": "={{ $json.candidates[0].content.parts[0].text }}",
+              "type": "string"
+            },
+            {
+              "id": "field-email-passthrough",
+              "name": "email",
+              "value": "={{ $('Set - Sample Input').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "field-ticket-passthrough",
+              "name": "ticket_id",
+              "value": "={{ $('Set - Sample Input').item.json.ticket_ID }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "af1943be-6322-4764-8f92-6ec27c134a34",
+      "name": "Set - Extract Category",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        128,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-billing",
+              "leftValue": "={{ $json.category }}",
+              "rightValue": "Billing",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4e9745e9-f556-439f-a388-eee201517123",
+      "name": "IF - Is Billing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        368,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-technical",
+              "leftValue": "={{ $json.category }}",
+              "rightValue": "Technical",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f6142055-c292-46e1-b957-6bd4d37f5c76",
+      "name": "IF - Is Technical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        576,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-team-inbox@example.com",
+        "toEmail": "your-team-inbox@example.com",
+        "subject": "=\ud83e\uddfe Billing Issue - Ticket {{ $json.ticket_id }}",
+        "html": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;\">\n\n  <h2 style=\"color:#1a73e8;\">\ud83e\uddfe New Billing Support Ticket</h2>\n\n  <p style=\"background:#e8f0fe;padding:12px;border-radius:6px;border-left:5px solid #1a73e8;\">\n    <strong>Action Required:</strong> A customer has raised a billing-related issue. \n    Please review and respond within <strong>24 hours</strong>.\n  </p>\n\n  <table style=\"width:100%;border-collapse:collapse;margin-top:16px;\">\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;width:40%;\">Ticket ID</td>\n      <td style=\"padding:10px;\">{{ $json.ticket_id }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px;font-weight:bold;\">Category</td>\n      <td style=\"padding:10px;\">Billing</td>\n    </tr>\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;\">Received At</td>\n      <td style=\"padding:10px;\">{{ $now.toISO() }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px;font-weight:bold;\">Status</td>\n      <td style=\"padding:10px;color:#1a73e8;\"><strong>OPEN \u2014 Awaiting Review</strong></td>\n    </tr>\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;\">SLA</td>\n      <td style=\"padding:10px;\">Response within <strong>24 hours</strong></td>\n    </tr>\n  </table>\n\n  <h3 style=\"margin-top:24px;\">Customer Message:</h3>\n  <blockquote style=\"border-left:4px solid #1a73e8;margin:0;padding:12px 16px;background:#f0f4ff;border-radius:4px;\">\n    {{ $json.email }}\n  </blockquote>\n\n  <h3 style=\"margin-top:24px;\">Suggested Actions:</h3>\n  <ul style=\"color:#444;line-height:1.8;\">\n    <li>Check customer's invoice history</li>\n    <li>Verify payment status in billing system</li>\n    <li>Review any pending refund requests</li>\n    <li>Reply to customer with resolution or update</li>\n  </ul>\n\n  <p style=\"margin-top:24px;padding:12px;background:#f5f5f5;border-radius:6px;color:#555;font-size:13px;\">\n    \ud83e\udd16 This ticket was auto-classified by the AI Support Classifier.<br/>\n    Ticket ID: <strong>{{ $json.ticket_id }}</strong> | \n    Time: <strong>{{ $now.toISO() }}</strong>\n  </p>\n\n</div>",
+        "options": {}
+      },
+      "id": "a9335e0c-974f-40fa-af7d-db00666d5272",
+      "name": "Email - Notify Billing Team",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        784,
+        -32
+      ],
+      "webhookId": "fb3ba770-4a68-4df6-a139-298a4fd56826",
+      "credentials": {
+        "smtp": {
+          "id": "zb9UiFBf5Eea5mqq",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-ticket-title",
+              "name": "ticket_tittle",
+              "value": "={{ 'Technical Issue '}}",
+              "type": "string"
+            },
+            {
+              "id": "field-ticket-status",
+              "name": "ticket_status",
+              "value": "open",
+              "type": "string"
+            },
+            {
+              "id": "field-ticket-priority",
+              "name": "ticket_priority",
+              "value": "medium",
+              "type": "string"
+            },
+            {
+              "id": "field-ticket-description",
+              "name": "ticket_description",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "field-ticket-created",
+              "name": "created_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "245410a2-7dd2-4790-b65c-1d78d7942bd7",
+              "name": "ticket_id",
+              "value": "={{ $('Set - Sample Input').item.json.ticket_ID }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "31a76d88-3ec6-44b2-a56f-400d55e2f0f9",
+      "name": "Set - Create Technical Ticket",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-team-inbox@example.com",
+        "toEmail": "your-team-inbox@example.com",
+        "subject": "=\ud83d\udea8 Escalation Required - Complaint Ticket {{ $json.ticket_id }}",
+        "html": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;\">\n\n  <h2 style=\"color:#e53935;\">\u26a0\ufe0f Customer Complaint \u2014 Escalation Required</h2>\n\n  <p style=\"background:#fce8e6;padding:12px;border-radius:6px;border-left:5px solid #e53935;\">\n    <strong>Priority: HIGH</strong> \u2014 This complaint requires immediate attention.\n  </p>\n\n  <table style=\"width:100%;border-collapse:collapse;margin-top:16px;\">\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;width:40%;\">Ticket ID</td>\n      <td style=\"padding:10px;\">{{ $json.ticket_id }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px;font-weight:bold;\">Category</td>\n      <td style=\"padding:10px;\">Complaint</td>\n    </tr>\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;\">Received At</td>\n      <td style=\"padding:10px;\">{{ $now.toISO() }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px;font-weight:bold;\">Status</td>\n      <td style=\"padding:10px;color:#e53935;\"><strong>OPEN \u2014 Awaiting Response</strong></td>\n    </tr>\n  </table>\n\n  <h3 style=\"margin-top:24px;\">Customer Message:</h3>\n  <blockquote style=\"border-left:4px solid #e53935;margin:0;padding:12px 16px;background:#fff3f3;border-radius:4px;\">\n    {{ $json.email }}\n  </blockquote>\n\n  <p style=\"margin-top:24px;color:#555;\">\n    Please respond to this customer within <strong>2 hours</strong>.<br/>\n    This ticket was auto-escalated by the AI Support Classifier.\n  </p>\n\n</div>",
+        "options": {}
+      },
+      "id": "9ece2007-7788-4642-928e-fae711760dcb",
+      "name": "Email - Escalate to Manager",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        912,
+        512
+      ],
+      "webhookId": "78800ca3-421d-4b55-aaae-6eb77686be44",
+      "credentials": {
+        "smtp": {
+          "id": "zb9UiFBf5Eea5mqq",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"ticket_id\": \"{{ $('Set - Sample Input').item.json.ticket_id }}\",\n  \"category\": \"{{ $('Set - Extract Category').item.json.category }}\",\n  \"message\": \"Ticket classified and routed successfully\"\n}",
+        "options": {}
+      },
+      "id": "ac347c4e-6b3e-4c0d-99b8-d77e1c32ff2d",
+      "name": "Webhook Response - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1312,
+        224
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "24b9720e-fd4d-4850-b6cb-2405be0247fe",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        992
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-team-inbox@example.com",
+        "toEmail": "your-team-inbox@example.com",
+        "subject": "=\u274c Workflow Execution Failed - {{ $json.workflow.name }}",
+        "emailFormat": "text",
+        "text": "=WORKFLOW EXECUTION FAILED - ADMIN ALERT\n========================================\n\n!! IMMEDIATE ACTION REQUIRED !!\n\nWORKFLOW DETAILS:\n-----------------\nWorkflow Name : {{ $json.workflow.name }}\nExecution ID  : {{ $json.execution.id }}\nFailed Node   : {{ $json.execution.lastNodeExecuted }}\nTimestamp     : {{ $now.toISO() }}\n\nERROR MESSAGE:\n--------------\n{{ $json.execution.error.message }}\n\nWHAT TO DO:\n-----------\n1. Open n8n at http://localhost:5678\n2. Go to Executions tab\n3. Find Execution ID: {{ $json.execution.id }}\n4. Click on the failed node (red node)\n5. Read the error output and fix the issue\n6. Re-run the workflow manually\n\nCOMMON FIXES:\n-------------\n- Gemini API error    : Check API key and model name in HTTP Request node\n- SMTP email error    : Check Gmail credentials and App Password\n- Webhook error       : Make sure workflow is Active\n- null value error    : Check all expression fields in Set nodes\n\n---\nAuto-generated by n8n Error Trigger\nSystem: AI Customer Support Email Classifier\nTime: {{ $now.toISO() }}",
+        "options": {}
+      },
+      "id": "ffa8e027-e20d-401c-b7d3-0f681e0c970e",
+      "name": "Email - Send Error Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -192,
+        992
+      ],
+      "webhookId": "130e8ac2-f5ed-438b-90bf-c213dfc6f112",
+      "credentials": {
+        "smtp": {
+          "id": "zb9UiFBf5Eea5mqq",
+          "name": "SMTP account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-email",
+              "name": "email",
+              "value": "Bad service.",
+              "type": "string"
+            },
+            {
+              "id": "field-timestamp",
+              "name": "received_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "field-ticket-id",
+              "name": "ticket_ID",
+              "value": "={{ 'TKT-' + $now.toMillis() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5848666d-5a0f-478e-b6de-30192f68ef57",
+      "name": "Set - Sample Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -320,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-team-inbox@example.com",
+        "toEmail": "your-team-inbox@example.com",
+        "subject": "technical issue",
+        "html": "=<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;\">\n\n  <h2 style=\"color:#34a853;\">\ud83d\udd27 New Technical Support Ticket</h2>\n\n  <p style=\"background:#e6f4ea;padding:12px;border-radius:6px;\n     border-left:5px solid #34a853;\">\n    <strong>Action Required:</strong> A new technical issue has been reported \n    and assigned to your team. Please investigate and respond within \n    <strong>48 hours</strong>.\n  </p>\n\n  <table style=\"width:100%;border-collapse:collapse;margin-top:16px;\">\n\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;width:40%;\">Ticket ID</td>\n      <td style=\"padding:10px;\">\n        <span style=\"background:#e6f4ea;color:#34a853;padding:4px 12px;\n          border-radius:12px;font-weight:bold;font-size:14px;\">\n          {{ $json.ticket_id }}\n        </span>\n      </td>\n    </tr>\n\n    <tr>\n      <td style=\"padding:10px;font-weight:bold;\">Title</td>\n      <td style=\"padding:10px;font-weight:bold;color:#333;\">\n        Technical Issue\n      </td>\n    </tr>\n\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;\">Status</td>\n      <td style=\"padding:10px;\">\n        <span style=\"background:#e6f4ea;color:#34a853;padding:3px 10px;\n          border-radius:12px;font-weight:bold;\">\n          OPEN\n        </span>\n      </td>\n    </tr>\n\n    <tr>\n      <td style=\"padding:10px;font-weight:bold;\">Priority</td>\n      <td style=\"padding:10px;\">\n        <span style=\"background:#fff3e0;color:#f57c00;padding:3px 10px;\n          border-radius:12px;font-weight:bold;\">\n          MEDIUM\n        </span>\n      </td>\n    </tr>\n\n    <tr style=\"background:#f5f5f5;\">\n      <td style=\"padding:10px;font-weight:bold;\">Created At</td>\n      <td style=\"padding:10px;\">{{ $json.created_at }}</td>\n    </tr>\n\n    <tr>\n      <td style=\"padding:10px;font-weight:bold;\">SLA Deadline</td>\n      <td style=\"padding:10px;color:#e53935;\">\n        <strong>Respond within 48 hours</strong>\n      </td>\n    </tr>\n\n  </table>\n\n  <h3 style=\"margin-top:24px;\">\ud83d\udccb Issue Reported by Customer:</h3>\n  <blockquote style=\"border-left:4px solid #34a853;margin:0;padding:12px 16px;\n    background:#f0faf0;border-radius:4px;font-size:15px;\">\n    {{ $json.ticket_description }}\n  </blockquote>\n\n  <h3 style=\"margin-top:24px;\">\ud83d\udee0\ufe0f Steps to Follow:</h3>\n  <ol style=\"color:#444;line-height:2;\">\n    <li>Review the issue description above carefully</li>\n    <li>Reproduce the issue in your test environment</li>\n    <li>Check server logs and error reports</li>\n    <li>Assign a developer to investigate</li>\n    <li>Update ticket status in the system</li>\n    <li>Reply to the customer with ETA or resolution</li>\n  </ol>\n\n  <div style=\"margin-top:24px;padding:16px;background:#f5f5f5;border-radius:8px;\">\n    <h3 style=\"margin:0 0 10px 0;color:#333;\">\ud83d\udcde Customer Reply Template:</h3>\n    <p style=\"background:#fff;padding:12px;border-radius:4px;\n      border:1px solid #ddd;color:#555;font-style:italic;line-height:1.8;\">\n      Dear Customer,<br/><br/>\n      Thank you for reaching out. We have received your technical issue \n      (Ticket ID: <strong>{{ $json.ticket_id }}</strong>) and our team is \n      currently investigating it. We will provide you with an update \n      within 48 hours.<br/><br/>\n      We apologize for the inconvenience.<br/><br/>\n      Best regards,<br/>\n      Technical Support Team\n    </p>\n  </div>\n\n  <p style=\"margin-top:24px;padding:12px;background:#e6f4ea;border-radius:6px;\n     color:#555;font-size:13px;text-align:center;\">\n    \ud83e\udd16 Auto-generated by AI Support Classifier &nbsp;|&nbsp;\n    Ticket: <strong>{{ $json.ticket_id }}</strong> &nbsp;|&nbsp;\n    Time: <strong>{{ $json.created_at }}</strong>\n  </p>\n\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1008,
+        256
+      ],
+      "id": "6493d923-6907-405a-b6fd-5b22aa5062b8",
+      "name": "Email create technical ticket",
+      "webhookId": "756d278f-b004-4dfa-a402-e9198d849525",
+      "credentials": {
+        "smtp": {
+          "id": "zb9UiFBf5Eea5mqq",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Support Ticket": {
+      "main": [
+        [
+          {
+            "node": "Set - Sample Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Extract Category": {
+      "main": [
+        [
+          {
+            "node": "IF - Is Billing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Is Billing?": {
+      "main": [
+        [
+          {
+            "node": "Email - Notify Billing Team",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF - Is Technical?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Is Technical?": {
+      "main": [
+        [
+          {
+            "node": "Set - Create Technical Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email - Escalate to Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Notify Billing Team": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Create Technical Ticket": {
+      "main": [
+        [
+          {
+            "node": "Email create technical ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Escalate to Manager": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Email - Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI - Classify Email (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Set - Extract Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set - Sample Input": {
+      "main": [
+        [
+          {
+            "node": "AI - Classify Email (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email create technical ticket": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "b342a54c-8de0-4c93-b1cd-8d1b3a3b3190",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0f7f273afccb0c1f3f238aecd27588fee91ac48b149ca5e8e7985ae77a47aab1"
+  },
+  "id": "FJeBG5XeUg6hhxkW",
+  "tags": [
+    {
+      "updatedAt": "2026-04-27T07:02:55.906Z",
+      "createdAt": "2026-04-27T07:02:55.906Z",
+      "id": "475dkpAvU5XIH2iJ",
+      "name": "AI Support"
+    },
+    {
+      "updatedAt": "2026-04-27T07:02:55.869Z",
+      "createdAt": "2026-04-27T07:02:55.869Z",
+      "id": "sLqOUYyXGlEy7cgf",
+      "name": "Email Automation"
+    }
+  ]
+}
