@@ -4,7 +4,8 @@ Automated ticket routing for customer support inboxes, built with **n8n**, **Goo
 
 Incoming support emails are sent to a webhook, classified by Gemini into **Billing**, **Technical**, or **Complaint**, and instantly routed to the right team by email — complete with SLA deadlines and ticket metadata. No manual triage required.
 
-![Workflow diagram](assets/workflow-diagram.jpg)
+![Workflow diagram] <img width="1001" height="535" alt="image" src="https://github.com/user-attachments/assets/43b4b0df-1fcd-4133-82f5-2e98e1e2430e" />
+
 
 ---
 
@@ -35,7 +36,7 @@ This workflow removes the manual step entirely: an email comes in, Gemini reads 
 
 ## How it works
 
-The workflow has 13 nodes in n8n:
+The workflow has 13 nodes in n8n: 
 
 ```
 Webhook (POST /support-ticket)
@@ -50,22 +51,22 @@ Webhook (POST /support-ticket)
   Set – Extract Category         (parses category out of the AI response)
         │
         ▼
-  IF – Is Billing? ──Yes──► Email – Notify Billing Team ──┐
+  IF – Is Billing? ──Yes──► Email – Notify Billing Team ─ ─┐
         │ No                                               │
         ▼                                                  │
   IF – Is Technical? ──Yes──► Set – Create Technical Ticket│
         │ No                          │                    │
-        │                             ▼                     │
+        │                             ▼                    │
         │                   Email – Create Technical Ticket│
         │                             │                    │
         ▼                             │                    │
   Email – Escalate to Manager         │                    │
         │                             │                    │
         └─────────────┬───────────────┴────────────────────┘
-                       ▼
+                      ▼
             Webhook Response – Success
 
-  (parallel) Error Trigger ──► Email – Send Error Alert
+  
 ```
 
 **Classification prompt** sent to Gemini:
@@ -84,21 +85,24 @@ A separate **Error Trigger → Email Alert** branch emails an admin if any node 
 
 **Billing**
 
-![Billing test case](assets/test-case-billing.jpg)
+![Billing test case] <img width="1200" height="675" alt="image" src="https://github.com/user-attachments/assets/69afd820-afa2-48b7-977a-7318fa2e8c1a" />
+
 
 </td>
 <td width="33%">
 
 **Technical**
 
-![Technical test case](assets/test-case-technical.jpg)
+![Technical test case] <img width="1200" height="675" alt="image" src="https://github.com/user-attachments/assets/d8d7254f-dae0-4896-b374-3926e041364d" />
+
 
 </td>
 <td width="33%">
 
 **Complaint**
 
-![Complaint test case](assets/test-case-complaint.jpg)
+![Complaint test case] <img width="1200" height="675" alt="image" src="https://github.com/user-attachments/assets/0ead7e74-a1bb-4604-af5d-8b549c3ba5bd" />
+
 
 </td>
 </tr>
