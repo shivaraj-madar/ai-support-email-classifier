@@ -1,0 +1,48 @@
+# Challenges & Learnings
+
+Issues hit while building this workflow, and how each was resolved. Keeping this here so the fixes aren't lost — and so anyone else hitting the same errors can skip the debugging.
+
+## Challenges faced
+
+### 1. Gemini model name deprecated
+
+`gemini-1.5-flash` stopped working partway through the build. The fix was switching the model in the HTTP Request node URL to `gemini-2.5-flash`.
+
+**Takeaway:** Google updates and deprecates Gemini model names frequently. If a previously-working request starts failing, check the [current model list](https://ai.google.dev/gemini-api/docs/models) before assuming the bug is elsewhere.
+
+### 2. `MAX_TOKENS` error — response cut off
+
+`maxOutputTokens` was initially set to `20`. Gemini's response was truncated before it finished generating the category, causing downstream parsing to fail.
+
+**Takeaway:** Gemini spends some of its token budget on internal "thinking" tokens before producing visible output. Set `maxOutputTokens` to at least `100` (this workflow uses `200`) even for a one-word expected response.
+
+### 3. SMTP connection failed
+
+Two separate issues here:
+- The **Host** field in the SMTP credential was left empty.
+- A normal Gmail account password was used and rejected by Google.
+
+**Takeaway:** Gmail SMTP requires:
+- Host: `smtp.gmail.com`
+- Port: `465` with SSL enabled
+- An **App Password** (16 characters, generated under Google Account → Security → 2-Step Verification → App Passwords) — your regular account password will not work if 2FA is enabled, which it should be.
+
+### 4. `ticket_id` returned `null` in manual execution
+
+When testing the workflow manually inside the n8n editor (rather than via a real webhook call), `$now.toMillis()` — used to generate the ticket ID — returned `null`.
+
+**Takeaway:** Some dynamic expressions only resolve correctly during a live execution triggered by an actual webhook call, not n8n's manual "execute workflow" test mode. Test ticket-ID generation and other timestamp-dependent logic via a real `curl`/Postman request to the webhook URL, not just the manual run button.
+
+### 5. Two items appeared at Webhook Response
+
+Both `IF - Is Billing?` and `IF - Is Technical?` appeared to fire from the same input, producing two items arriving at the final response node.
+
+**Takeaway:** This is expected n8n behavior — both IF nodes receive a copy of the same input from the upstream `Set` node and evaluate independently in parallel; it isn't a bug. Downstream logic should account for parallel branches converging rather than assuming a single linear path.
+
+## Key learnings (summary)
+
+- ✅ Always verify exact Gemini model names before deploying — AI APIs update models frequently and old names get retired.
+- ✅ Set `maxOutputTokens` to 100+ for Gemini calls, even for short expected outputs — thinking tokens count against the budget.
+- ✅ Gmail SMTP needs an App Password, a non-empty Host field, and SSL on port 465.
+- ✅ Test with a live webhook call, not manual execution — manual mode skips some dynamic expressions.
+- ✅ n8n `IF` nodes branching off the same upstream node each receive the full input independently; this parallel behavior is expected, not a bug.
